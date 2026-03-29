@@ -1,18 +1,16 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Final Fix
+    name: Strik2.emu M4 Professional Fix
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
-      vars:
-        # إضافة مسار المكتبات لضمان عثور CMake عليها
-        CMAKE_MODULE_PATH: ${ROBOT_WORK_DIR}/src/cpp/cmake
     scripts:
-      - name: Fetch Submodules
+      - name: Fetch Submodules (The Core Fix)
         script: |
-          # حل مشكلة ملف Pcsx2Utils المفقود
-          git submodule update --init --recursive
+          # حل المشكلة الأولى: جلب ملف Pcsx2Utils والمكتبات الناقصة
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
 
       - name: M4 Display Patch
         script: |
@@ -22,20 +20,21 @@ workflows:
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
           fi
 
-      - name: CMake Configure
+      - name: CMake Configure (With Module Path)
         script: |
-          # حل مشكلة Unknown CMake command "check_no_parenthesis_in_path"
-          # عن طريق توجيه الـ CMake للمجلد الصحيح وتعريف الـ Modules
+          # حل المشكلة الثانية: توجيه CMake لمجلد الموديولات ليتعرف على الأوامر
+          # تم دمج الحل الأصح بإضافة مسار cmake الخاص بالمطور
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
-            -DiPSX2_REAL_DEVICE=ON
+            -DiPSX2_REAL_DEVICE=ON \
+            -DCMAKE_MODULE_PATH="cmake"
 
       - name: Build and Package
         script: |
-          # بناء المشروع وتجميع الـ IPA
+          # تنفيذ بناء الـ Target الرسمي iPSX2
           cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
           mkdir -p Payload
