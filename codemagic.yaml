@@ -1,6 +1,6 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Official Build
+    name: Strik2.emu M4 Official Flow
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -8,7 +8,7 @@ workflows:
     scripts:
       - name: Fetch Submodules
         script: |
-          # هذا الأمر سيجلب ملف Pcsx2Utils والمكتبات الناقصة التي تسببت في الخطأ
+          # هذا الأمر يحل مشكلة ملف Pcsx2Utils المفقود في السجل
           git submodule update --init --recursive
 
       - name: M4 Display Patch
@@ -17,11 +17,13 @@ workflows:
           FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
+            echo "M4 Patch applied"
           fi
 
       - name: CMake Configure
         script: |
-          # توجيه السيرفر للمجلد الصحيح src/cpp كما هو موضح في هيكلية ملفاتك
+          # استخدام الإعدادات الرسمية من ملف BUILD_IOS.md
+          # وتوجيه البحث لمجلد src/cpp حيث يوجد ملف CMakeLists.txt
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
@@ -31,7 +33,7 @@ workflows:
 
       - name: Build and Package
         script: |
-          # بناء التطبيق وتجهيز الـ IPA
+          # تنفيذ أمر البناء الرسمي وتجميع الـ IPA
           cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
           mkdir -p Payload
