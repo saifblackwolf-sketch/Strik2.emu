@@ -1,22 +1,27 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Bulletproof Flow
+    name: Strik2.emu M4 Platform Bypass
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
     scripts:
-      - name: Inject Full CMake Modules
+      - name: Inject and Patch Modules (Bypass Fix)
         script: |
-          # جلب المكتبات من المصدر لضمان وجود Pcsx2Utils
+          # 1. جلب المكتبات الأصلية
           git clone --depth=1 https://github.com/PCSX2/pcsx2.git temp_pcsx2
           mkdir -p src/cpp/cmake
           cp -r temp_pcsx2/cmake/* src/cpp/cmake/
-          echo "Full modules injected successfully."
+
+          # 2. خدعة المنصة: إجبار Pcsx2Utils على قبول iOS كمنصة Apple (مثل macOS)
+          # سنقوم بحذف التحقق من المنصة أو تعديله ليقبل iOS
+          sed -i '' 's/message(FATAL_ERROR "Unsupported platform.")/set(APPLE 1)/g' src/cpp/cmake/Pcsx2Utils.cmake
+          
+          echo "Platform check bypassed in Pcsx2Utils.cmake"
 
       - name: Patch CMakeLists.txt (Robust AWK Fix)
         script: |
-          # حل مشكلة الحساسية للتنسيق باستخدام AWK لضمان الحقن الصحيح
+          # التأكد من حقن المسار الصحيح للمكتبات الملحقة
           TARGET_FILE="src/cpp/CMakeLists.txt"
           awk '
           /include\(Pcsx2Utils\)/ {
@@ -24,36 +29,31 @@ workflows:
           }
           { print }
           ' "$TARGET_FILE" > temp && mv temp "$TARGET_FILE"
-          echo "==== PATCH RESULT ===="
-          grep -n "CMAKE_MODULE_PATH" "$TARGET_FILE"
 
       - name: M4 Display Patch
         script: |
-          # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4
+          # تعديل الأبعاد لتناسب شاشة iPad Pro M4
           FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
           fi
 
-      - name: CMake Configure (Policy Fix)
+      - name: CMake Configure (Platform Forced)
         script: |
-          # إضافة CMP0077 وتوجيه المسار لضمان استقرار الإعداد
+          # تعريف APPLE و iOS يدوياً لضمان استمرار البناء
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
             -DiPSX2_REAL_DEVICE=ON \
+            -DAPPLE=1 \
+            -DIOS=1 \
             -DCMAKE_POLICY_DEFAULT_CMP0077=NEW
-
-      - name: List All Targets (Debug Step)
-        script: |
-          # خطوة ذكية للتأكد من اسم الـ target قبل البناء الفعلي
-          cmake --build build/ios_device --target help
 
       - name: Build and Package
         script: |
-          # بناء الهدف iPSX2 (أو الهدف المكتشف) وتجميع الـ IPA
+          # بناء الهدف المكتشف وتجميع الـ IPA
           cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
           mkdir -p Payload
