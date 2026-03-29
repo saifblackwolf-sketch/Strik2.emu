@@ -45,6 +45,6 @@ workflows:
           xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
           APP_PATH=$(find build/ios_device -name "*.app" -type d | head -n 1)
           cd build/ios_device && mkdir -p Payload && cp -R "$APP_PATH" Payload/ && zip -qr iPSX2_M4_Final.ipa Payload/
-     
+    
     artifacts:
       - build/ios_device/*.ipa
