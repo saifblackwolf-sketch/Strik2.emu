@@ -1,6 +1,6 @@
 workflows:
   m4-ultimate-build:
-    name: STRIK2 M4 Clean Build
+    name: Strik2.emu M4 Build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -11,23 +11,25 @@ workflows:
           # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4
           find . -name "GSRenderer.cpp" -exec sed -i '' 's/1.333f/1.432f/g' {} +
           
-      - name: Generate and Build
+      - name: Generate Xcode Project
         script: |
-          # الدخول لمجلد الأكواد الأساسي
+          # الدخول لمجلد الأكواد وصناعة المشروع
           cd src/cpp
-          mkdir build && cd build
+          mkdir -p build && cd build
+          cmake .. -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos
           
-          # محاولة توليد المشروع مع تجاهل الأخطاء غير المؤثرة
-          cmake .. -G Xcode \
-            -DCMAKE_SYSTEM_NAME=iOS \
-            -DCMAKE_OSX_SYSROOT=iphoneos \
-            -DPCSX2_CORE=ON
-          
-          # البحث عن ملف المشروع وبناؤه
+      - name: Dynamic Build IPA
+        script: |
+          cd src/cpp/build
+          # استخراج اسم المشروع والـ Scheme تلقائياً مهما كان الاسم
           PROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          SCHEME=$(xcodebuild -list -project "$PROJ" | awk '/Schemes:/ {found=1; next} found {print $1; exit}')
+          
+          echo "Building: $PROJ with Scheme: $SCHEME"
+          
           xcodebuild build \
             -project "$PROJ" \
-            -scheme "iPSX2" \
+            -scheme "$SCHEME" \
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO
