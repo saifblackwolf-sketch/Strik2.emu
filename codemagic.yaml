@@ -28,11 +28,10 @@ workflows:
           endfunction()
           EOF
           
-          # دمج التعديل مع الملف الأصلي (إذا كان الملف موجوداً)
+          # دمج التعديل مع الملف الأصلي
           if [ -f src/cpp/cmake/Pcsx2Utils.cmake ]; then
             echo "include(PlatformiOS)" >> src/cpp/cmake/Pcsx2Utils.cmake
           else
-            echo "Warning: Pcsx2Utils.cmake not found, creating new one"
             cp src/cpp/cmake/PlatformiOS.cmake src/cpp/cmake/Pcsx2Utils.cmake
           fi
           
@@ -43,10 +42,11 @@ workflows:
           TARGET_FILE="src/cpp/CMakeLists.txt"
           if [ -f "$TARGET_FILE" ]; then
             # إضافة مسار الوحدات إذا لم يكن موجوداً
-            grep -q "CMAKE_MODULE_PATH" "$TARGET_FILE" || \
+            if ! grep -q "CMAKE_MODULE_PATH" "$TARGET_FILE"; then
               sed -i '' '1i\
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-' "$TARGET_FILE"
+          list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+          ' "$TARGET_FILE"
+            fi
             echo "CMakeLists.txt patched."
           else
             echo "Error: $TARGET_FILE not found"
@@ -58,9 +58,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
           FILE=$(find src -name "GSRenderer.cpp" 2>/dev/null | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
-            echo "Display patch applied."
+            echo "Display patch applied to $FILE"
           else
-            echo "GSRenderer.cpp not found, skipping."
+            echo "GSRenderer.cpp not found, skipping display patch."
           fi
 
       - name: CMake Configure
@@ -85,33 +85,27 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
             exit 1
           fi
           
-          # عرض محتويات مجلد البناء للمساعدة في التشخيص
+          echo "CMake Configure completed."
           echo "Contents of build/ios_device:"
           ls -la build/ios_device/
 
-      - name: Build and Package (Auto-detect)
+      - name: Build and Package
         script: |
           # البحث عن ملف المشروع .xcodeproj
           PROJECT_FILE=$(find build/ios_device -name "*.xcodeproj" -maxdepth 2 | head -n 1)
           if [ -z "$PROJECT_FILE" ]; then
             echo "Error: No Xcode project found in build/ios_device"
+            ls -la build/ios_device/
             exit 1
           fi
           
           echo "Found project: $PROJECT_FILE"
           
-          # محاولة بناء الهدف iPSX2 (الاسم الشائع)
-          xcodebuild -project "$PROJECT_FILE" -configuration Release -scheme iPSX2 -sdk iphoneos build
-          BUILD_RESULT=$?
+          # محاولة بناء الهدف iPSX2
+          xcodebuild -project "$PROJECT_FILE" -configuration Release -scheme iPSX2 -sdk iphoneos build || \
+          xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
           
-          # إذا فشل الهدف iPSX2، حاول بناء جميع الأهداف أو البحث عن الهدف الصحيح
-          if [ $BUILD_RESULT -ne 0 ]; then
-            echo "Scheme iPSX2 not found, trying to build all targets..."
-            xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
-            BUILD_RESULT=$?
-          fi
-          
-          if [ $BUILD_RESULT -ne 0 ]; then
+          if [ $? -ne 0 ]; then
             echo "Build failed"
             exit 1
           fi
@@ -131,6 +125,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
           cp -R "$APP_PATH" Payload/
           zip -qr iPSX2_M4_Final.ipa Payload/
           echo "IPA created: $(pwd)/iPSX2_M4_Final.ipa"
+          
+          # عرض حجم الملف
+          ls -lh iPSX2_M4_Final.ipa
 
     artifacts:
       - build/ios_device/*.ipa
