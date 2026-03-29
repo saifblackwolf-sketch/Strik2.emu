@@ -1,24 +1,27 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Pro Build
+    name: Strik2.emu M4 Official Build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
     scripts:
+      - name: Fetch Submodules
+        script: |
+          # هذا الأمر سيجلب ملف Pcsx2Utils والمكتبات الناقصة التي تسببت في الخطأ
+          git submodule update --init --recursive
+
       - name: M4 Display Patch
         script: |
-          # تطبيق نسبة 1.432f لتناسب أبعاد شاشة الـ M4
+          # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4
           FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
-            echo "M4 Patch applied successfully"
           fi
 
-      - name: Generate Xcode Project (CMake)
+      - name: CMake Configure
         script: |
-          # الدخول للمجلد الذي يحتوي على CMakeLists.txt
-          # بناءً على صورك، الملف موجود داخل src/cpp
+          # توجيه السيرفر للمجلد الصحيح src/cpp كما هو موضح في هيكلية ملفاتك
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
@@ -26,23 +29,14 @@ workflows:
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
             -DiPSX2_REAL_DEVICE=ON
 
-      - name: Build Unsigned IPA
+      - name: Build and Package
         script: |
-          # الانتقال لمجلد البناء الناتج
+          # بناء التطبيق وتجهيز الـ IPA
+          cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
-          
-          # بناء التطبيق باستخدام الأوامر الأصلية
-          xcodebuild build \
-            -project "iPSX2.xcodeproj" \
-            -target "iPSX2" \
-            -configuration "Release" \
-            -sdk "iphoneos" \
-            CODE_SIGNING_ALLOWED=NO
-          
-          # تجميع الـ IPA يدوياً كما في تعليمات المطور
           mkdir -p Payload
           cp -R Release-iphoneos/iPSX2.app Payload/
-          zip -qr iPSX2_M4_Final.ipa Payload/
+          zip -qr iPSX2_M4_Strik2.ipa Payload/
 
     artifacts:
       - build/ios_device/*.ipa
