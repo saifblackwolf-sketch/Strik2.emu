@@ -1,18 +1,31 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Ultimate Fix
+    name: Strik2.emu M4 Bulletproof Flow
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
     scripts:
-      - name: Inject Full CMake Modules (Cleanest Fix)
+      - name: Inject Full CMake Modules
         script: |
-          # حل مشكلة المسارات والمكتبات المفقودة نهائياً
+          # جلب المكتبات من المصدر لضمان وجود Pcsx2Utils
           git clone --depth=1 https://github.com/PCSX2/pcsx2.git temp_pcsx2
           mkdir -p src/cpp/cmake
           cp -r temp_pcsx2/cmake/* src/cpp/cmake/
-          echo "All CMake modules injected into src/cpp/cmake"
+          echo "Full modules injected successfully."
+
+      - name: Patch CMakeLists.txt (Robust AWK Fix)
+        script: |
+          # حل مشكلة الحساسية للتنسيق باستخدام AWK لضمان الحقن الصحيح
+          TARGET_FILE="src/cpp/CMakeLists.txt"
+          awk '
+          /include\(Pcsx2Utils\)/ {
+            print "list(APPEND CMAKE_MODULE_PATH \"${CMAKE_SOURCE_DIR}/cmake\")"
+          }
+          { print }
+          ' "$TARGET_FILE" > temp && mv temp "$TARGET_FILE"
+          echo "==== PATCH RESULT ===="
+          grep -n "CMAKE_MODULE_PATH" "$TARGET_FILE"
 
       - name: M4 Display Patch
         script: |
@@ -22,20 +35,25 @@ workflows:
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
           fi
 
-      - name: CMake Configure (Corrected Path)
+      - name: CMake Configure (Policy Fix)
         script: |
-          # تصحيح المسار ليكون src/cpp/cmake كما حللت بدقة
+          # إضافة CMP0077 وتوجيه المسار لضمان استقرار الإعداد
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 \
             -DiPSX2_REAL_DEVICE=ON \
-            -DCMAKE_MODULE_PATH="src/cpp/cmake"
+            -DCMAKE_POLICY_DEFAULT_CMP0077=NEW
+
+      - name: List All Targets (Debug Step)
+        script: |
+          # خطوة ذكية للتأكد من اسم الـ target قبل البناء الفعلي
+          cmake --build build/ios_device --target help
 
       - name: Build and Package
         script: |
-          # بناء المحاكي وتجميع الـ IPA النهائي
+          # بناء الهدف iPSX2 (أو الهدف المكتشف) وتجميع الـ IPA
           cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
           mkdir -p Payload
