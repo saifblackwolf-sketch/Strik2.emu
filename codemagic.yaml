@@ -129,4 +129,4 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
           echo "✅ IPA created: $(pwd)/iPSX2_M4_Final.ipa"
 
     artifacts:
-      - build/ios_device/*.ipa
+      - build/ios_device/*.ipa 
