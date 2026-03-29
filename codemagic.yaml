@@ -1,14 +1,17 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Official Flow
+    name: Strik2.emu M4 Final Fix
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
+      vars:
+        # إضافة مسار المكتبات لضمان عثور CMake عليها
+        CMAKE_MODULE_PATH: ${ROBOT_WORK_DIR}/src/cpp/cmake
     scripts:
       - name: Fetch Submodules
         script: |
-          # هذا الأمر يحل مشكلة ملف Pcsx2Utils المفقود في السجل
+          # حل مشكلة ملف Pcsx2Utils المفقود
           git submodule update --init --recursive
 
       - name: M4 Display Patch
@@ -17,13 +20,12 @@ workflows:
           FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
-            echo "M4 Patch applied"
           fi
 
       - name: CMake Configure
         script: |
-          # استخدام الإعدادات الرسمية من ملف BUILD_IOS.md
-          # وتوجيه البحث لمجلد src/cpp حيث يوجد ملف CMakeLists.txt
+          # حل مشكلة Unknown CMake command "check_no_parenthesis_in_path"
+          # عن طريق توجيه الـ CMake للمجلد الصحيح وتعريف الـ Modules
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
@@ -33,12 +35,12 @@ workflows:
 
       - name: Build and Package
         script: |
-          # تنفيذ أمر البناء الرسمي وتجميع الـ IPA
+          # بناء المشروع وتجميع الـ IPA
           cmake --build build/ios_device --target iPSX2 --config Release
           cd build/ios_device
           mkdir -p Payload
           cp -R Release-iphoneos/iPSX2.app Payload/
-          zip -qr iPSX2_M4_Strik2.ipa Payload/
+          zip -qr iPSX2_M4_Final.ipa Payload/
 
     artifacts:
       - build/ios_device/*.ipa
