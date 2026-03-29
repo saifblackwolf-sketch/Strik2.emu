@@ -27,34 +27,22 @@ workflows:
               message(STATUS "Platform override: Forcing iOS compatibility")
           endfunction()
           EOF
-          
-          # دمج التعديل مع الملف الأصلي
+
+          # دمج التعديل مع الملف الأصلي (إذا كان الملف موجوداً)
           if [ -f src/cpp/cmake/Pcsx2Utils.cmake ]; then
             echo "include(PlatformiOS)" >> src/cpp/cmake/Pcsx2Utils.cmake
           else
+            # إذا لم يكن الملف موجوداً، ننشئ نسخة مصغرة
             cp src/cpp/cmake/PlatformiOS.cmake src/cpp/cmake/Pcsx2Utils.cmake
           fi
-          
-          echo "Platform check bypassed."
 
-      - name: Patch CMakeLists.txt
-        script: |
-          TARGET_FILE="src/cpp/CMakeLists.txt"
-          if [ -f "$TARGET_FILE" ]; then
-            # إضافة مسار الوحدات إذا لم يكن موجوداً
-            if ! grep -q "CMAKE_MODULE_PATH" "$TARGET_FILE"; then
-              sed -i '' '1i\
-          list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
-          ' "$TARGET_FILE"
-            fi
-            echo "CMakeLists.txt patched."
-          else
-            echo "Error: $TARGET_FILE not found"
-            exit 1
-          fi
+          # التحقق من وجود الملف
+          ls -la src/cpp/cmake/
+          echo "Platform check bypassed."
 
       - name: M4 Display Patch
         script: |
+          # تعديل الأبعاد لتناسب شاشة iPad Pro M4
           FILE=$(find src -name "GSRenderer.cpp" 2>/dev/null | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
@@ -67,8 +55,8 @@ workflows:
         script: |
           # تنظيف أي بناء سابق
           rm -rf build/ios_device
-          
-          # تهيئة CMake مع إعدادات iOS
+
+          # تهيئة CMake مع إعدادات iOS، مع تحديد مسار الوحدات مباشرة
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
@@ -77,14 +65,15 @@ workflows:
             -DiPSX2_REAL_DEVICE=ON \
             -DCMAKE_POLICY_DEFAULT_CMP0077=NEW \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED="NO" \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO"
-          
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" \
+            -DCMAKE_MODULE_PATH="${PWD}/src/cpp/cmake"
+
           # التحقق من نجاح التهيئة
           if [ $? -ne 0 ]; then
             echo "CMake configuration failed"
             exit 1
           fi
-          
+
           echo "CMake Configure completed."
           echo "Contents of build/ios_device:"
           ls -la build/ios_device/
@@ -98,35 +87,33 @@ workflows:
             ls -la build/ios_device/
             exit 1
           fi
-          
+
           echo "Found project: $PROJECT_FILE"
-          
-          # محاولة بناء الهدف iPSX2
+
+          # محاولة بناء الهدف iPSX2، وإن فشل جرب بناء كل الأهداف
           xcodebuild -project "$PROJECT_FILE" -configuration Release -scheme iPSX2 -sdk iphoneos build || \
           xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
-          
+
           if [ $? -ne 0 ]; then
             echo "Build failed"
             exit 1
           fi
-          
+
           # البحث عن ملف .app الناتج
           APP_PATH=$(find build/ios_device -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "Error: No .app bundle found after build"
             exit 1
           fi
-          
+
           echo "App found at: $APP_PATH"
-          
+
           # إنشاء الـ IPA
           cd build/ios_device
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
           zip -qr iPSX2_M4_Final.ipa Payload/
           echo "IPA created: $(pwd)/iPSX2_M4_Final.ipa"
-          
-          # عرض حجم الملف
           ls -lh iPSX2_M4_Final.ipa
 
     artifacts:
