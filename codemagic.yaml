@@ -1,6 +1,6 @@
 workflows:
   strik2-m4-build:
-    name: Strik2.emu M4 Professional Build
+    name: Strik2.emu M4 Pro Build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -8,19 +8,18 @@ workflows:
     scripts:
       - name: M4 Display Patch
         script: |
-          # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4 فائقة الدقة
+          # تطبيق نسبة 1.432f لتناسب أبعاد شاشة الـ M4
           FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
-            echo "M4 Patch applied to $FILE"
+            echo "M4 Patch applied successfully"
           fi
 
-      - name: CMake Configure (From Original Script)
+      - name: Generate Xcode Project (CMake)
         script: |
-          # استخدام الإعدادات الأصلية للمطور لضمان استقرار الـ 60 FPS
-          cd src/cpp
-          mkdir -p build && cd build
-          cmake .. -G Xcode \
+          # الدخول للمجلد الذي يحتوي على CMakeLists.txt
+          # بناءً على صورك، الملف موجود داخل src/cpp
+          cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -29,8 +28,10 @@ workflows:
 
       - name: Build Unsigned IPA
         script: |
-          cd src/cpp/build
-          # بناء المشروع باستخدام اسم الـ Target الأصلي iPSX2
+          # الانتقال لمجلد البناء الناتج
+          cd build/ios_device
+          
+          # بناء التطبيق باستخدام الأوامر الأصلية
           xcodebuild build \
             -project "iPSX2.xcodeproj" \
             -target "iPSX2" \
@@ -38,10 +39,10 @@ workflows:
             -sdk "iphoneos" \
             CODE_SIGNING_ALLOWED=NO
           
-          # تجميع ملف الـ IPA يدوياً كما يفعل المطور
+          # تجميع الـ IPA يدوياً كما في تعليمات المطور
           mkdir -p Payload
           cp -R Release-iphoneos/iPSX2.app Payload/
-          zip -qr iPSX2_M4.ipa Payload/
+          zip -qr iPSX2_M4_Final.ipa Payload/
 
     artifacts:
-      - src/cpp/build/*.ipa
+      - build/ios_device/*.ipa
