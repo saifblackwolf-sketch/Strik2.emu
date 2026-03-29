@@ -8,15 +8,12 @@ workflows:
     scripts:
       - name: Create Required CMake Module
         script: |
-          # إنشاء المجلد إذا لم يكن موجوداً
           mkdir -p src/cpp/cmake
 
-          # إنشاء ملف Pcsx2Utils.cmake كامل المحتوى
           cat > src/cpp/cmake/Pcsx2Utils.cmake << 'EOF'
           # Pcsx2Utils.cmake - ضروري لبناء iPSX2 على iOS
           cmake_minimum_required(VERSION 3.16)
 
-          # تجاوز التحقق من المنصة (دعم iOS)
           function(detect_operating_system)
               set(APPLE 1 PARENT_SCOPE)
               set(IOS 1 PARENT_SCOPE)
@@ -25,21 +22,16 @@ workflows:
               message(STATUS "Platform override: iOS detected and forced")
           endfunction()
 
-          # تعريف الدالة المطلوبة من CMakeLists.txt
           function(check_no_parenthesis_in_path path)
-              # التحقق من وجود أقواس في المسار (غير مدعومة)
               if("${path}" MATCHES "[()]")
                   message(WARNING "Path contains parentheses: ${path}")
               endif()
           endfunction()
 
-          # دوال أخرى محتملة يحتاجها المشروع (يمكن إضافتها حسب الحاجة)
           function(check_compiler_abi)
-              # لا تفعل شيئاً، فقط للتجاوز
           endfunction()
 
           function(set_common_flags)
-              # تعيين أعلام عامة
               if(APPLE)
                   add_compile_options(-fobjc-arc)
                   add_compile_options(-fembed-bitcode)
@@ -47,11 +39,33 @@ workflows:
           endfunction()
           EOF
 
-          echo "✅ Pcsx2Utils.cmake created with required functions"
+          echo "✅ Pcsx2Utils.cmake created at src/cpp/cmake/Pcsx2Utils.cmake"
+          ls -la src/cpp/cmake/
+
+      - name: Patch CMakeLists.txt to add module path
+        script: |
+          TARGET="src/cpp/CMakeLists.txt"
+          if [ ! -f "$TARGET" ]; then
+            echo "❌ $TARGET not found"
+            exit 1
+          fi
+
+          # إضافة السطر في بداية الملف إذا لم يكن موجوداً
+          if ! grep -q "CMAKE_MODULE_PATH.*cmake" "$TARGET"; then
+            # نضيف السطر قبل السطر الأول
+            sed -i '' '1i\
+          list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+          ' "$TARGET"
+            echo "✅ Added CMAKE_MODULE_PATH to $TARGET"
+          else
+            echo "ℹ️ CMAKE_MODULE_PATH already set in $TARGET"
+          fi
+
+          # عرض أول 10 أسطر للتأكد
+          head -10 "$TARGET"
 
       - name: M4 Display Patch
         script: |
-          # تعديل الأبعاد لتناسب شاشة iPad Pro M4
           FILE=$(find src -name "GSRenderer.cpp" 2>/dev/null | head -n 1)
           if [ -f "$FILE" ]; then
             sed -i '' 's/1.333f/1.432f/g' "$FILE"
@@ -62,10 +76,8 @@ workflows:
 
       - name: CMake Configure
         script: |
-          # تنظيف أي بناء سابق
           rm -rf build/ios_device
 
-          # تهيئة CMake مع إعدادات iOS
           cmake -S src/cpp -B build/ios_device -G Xcode \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT=iphoneos \
@@ -74,8 +86,7 @@ workflows:
             -DiPSX2_REAL_DEVICE=ON \
             -DCMAKE_POLICY_DEFAULT_CMP0077=NEW \
             -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED="NO" \
-            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO" \
-            -DCMAKE_MODULE_PATH="${PWD}/src/cpp/cmake"
+            -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED="NO"
 
           if [ $? -ne 0 ]; then
             echo "❌ CMake configuration failed"
@@ -83,12 +94,10 @@ workflows:
           fi
 
           echo "✅ CMake Configure completed"
-          echo "📁 Contents of build/ios_device:"
           ls -la build/ios_device/
 
       - name: Build and Package
         script: |
-          # البحث عن ملف المشروع .xcodeproj
           PROJECT_FILE=$(find build/ios_device -name "*.xcodeproj" -maxdepth 2 | head -n 1)
           if [ -z "$PROJECT_FILE" ]; then
             echo "❌ No Xcode project found in build/ios_device"
@@ -98,7 +107,6 @@ workflows:
 
           echo "✅ Found project: $PROJECT_FILE"
 
-          # محاولة بناء الهدف iPSX2، وإن فشل جرب بناء كل الأهداف
           xcodebuild -project "$PROJECT_FILE" -configuration Release -scheme iPSX2 -sdk iphoneos build || \
           xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
 
@@ -107,7 +115,6 @@ workflows:
             exit 1
           fi
 
-          # البحث عن ملف .app الناتج
           APP_PATH=$(find build/ios_device -name "*.app" -type d | head -n 1)
           if [ -z "$APP_PATH" ]; then
             echo "❌ No .app bundle found after build"
@@ -116,7 +123,6 @@ workflows:
 
           echo "✅ App found at: $APP_PATH"
 
-          # إنشاء الـ IPA
           cd build/ios_device
           mkdir -p Payload
           cp -R "$APP_PATH" Payload/
