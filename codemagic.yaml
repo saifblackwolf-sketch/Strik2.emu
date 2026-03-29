@@ -1,31 +1,48 @@
 workflows:
-  m4-ultimate-build:
-    name: Strik2.emu M4 Build
+  strik2-m4-build:
+    name: Strik2.emu M4 Ultimate Build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
       xcode: latest
     scripts:
+      - name: Fetch Submodules
+        script: |
+          # جلب المكتبات الخارجية المفقودة لضمان اكتمال الـ 12 ألف ملف
+          git submodule update --init --recursive
+
       - name: M4 Display Patch
         script: |
-          # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4
-          find . -name "GSRenderer.cpp" -exec sed -i '' 's/1.333f/1.432f/g' {} +
-          
+          # البحث عن ملف الجرافيكس وتعديله لنسبة شاشة الـ M4 (1.432f)
+          FILE=$(find . -name "GSRenderer.cpp" | head -n 1)
+          if [ -f "$FILE" ]; then
+            sed -i '' 's/1.333f/1.432f/g' "$FILE"
+            echo "M4 Patch applied successfully to $FILE"
+          else
+            echo "GSRenderer.cpp not found, skipping patch"
+          fi
+
       - name: Generate Xcode Project
         script: |
-          # الدخول لمجلد الأكواد وصناعة المشروع
+          # الدخول لمجلد الأكواد وصناعة ملف المشروع الأزرق (.xcodeproj)
           cd src/cpp
-          mkdir -p build && cd build
-          cmake .. -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos
-          
-      - name: Dynamic Build IPA
+          rm -rf build
+          mkdir build && cd build
+          cmake .. \
+            -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0
+
+      - name: Build IPA
         script: |
           cd src/cpp/build
-          # استخراج اسم المشروع والـ Scheme تلقائياً مهما كان الاسم
+          # استخراج اسم المشروع والـ Scheme تلقائياً لتجنب أخطاء التسمية
           PROJ=$(find . -name "*.xcodeproj" | head -n 1)
           SCHEME=$(xcodebuild -list -project "$PROJ" | awk '/Schemes:/ {found=1; next} found {print $1; exit}')
           
-          echo "Building: $PROJ with Scheme: $SCHEME"
+          echo "Building: $PROJ with Scheme: $SCHEME for M4 iPad"
           
           xcodebuild build \
             -project "$PROJ" \
@@ -33,6 +50,7 @@ workflows:
             -sdk iphoneos \
             -configuration Release \
             CODE_SIGNING_ALLOWED=NO
+
     artifacts:
       - src/cpp/build/**/*.app
       - src/cpp/build/**/*.ipa
