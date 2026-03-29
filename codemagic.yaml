@@ -1,6 +1,6 @@
 workflows:
   m4-ultimate-build:
-    name: STRIK2 M4 Direct Build
+    name: STRIK2 M4 Clean Build
     instance_type: mac_mini_m2
     max_build_duration: 60
     environment:
@@ -8,18 +8,29 @@ workflows:
     scripts:
       - name: M4 Display Patch
         script: |
-          # تعديل أبعاد الشاشة لنسبة 1.432f لتناسب الـ iPad Pro M4
+          # تطبيق نسبة 1.432f لتناسب شاشة iPad Pro M4
           find . -name "GSRenderer.cpp" -exec sed -i '' 's/1.333f/1.432f/g' {} +
-      - name: Build Emulator
+          
+      - name: Generate and Build
         script: |
-          # البحث عن أي ملف xcodeproj جاهز في كل المجلدات
-          PROJ=$(find . -name "*.xcodeproj" -not -path "*/3rdparty/*" | head -n 1)
-          if [ -z "$PROJ" ]; then 
-            echo "No ready project found. Trying alternative method..."
-            exit 1
-          fi
-          echo "Building found project: $PROJ"
-          xcodebuild build -project "$PROJ" -scheme "iPSX2" -sdk iphoneos -configuration Release CODE_SIGNING_ALLOWED=NO
+          # الدخول لمجلد الأكواد الأساسي
+          cd src/cpp
+          mkdir build && cd build
+          
+          # محاولة توليد المشروع مع تجاهل الأخطاء غير المؤثرة
+          cmake .. -G Xcode \
+            -DCMAKE_SYSTEM_NAME=iOS \
+            -DCMAKE_OSX_SYSROOT=iphoneos \
+            -DPCSX2_CORE=ON
+          
+          # البحث عن ملف المشروع وبناؤه
+          PROJ=$(find . -name "*.xcodeproj" | head -n 1)
+          xcodebuild build \
+            -project "$PROJ" \
+            -scheme "iPSX2" \
+            -sdk iphoneos \
+            -configuration Release \
+            CODE_SIGNING_ALLOWED=NO
     artifacts:
-      - "**/*.ipa"
-      - "**/*.app"
+      - src/cpp/build/**/*.app
+      - src/cpp/build/**/*.ipa
