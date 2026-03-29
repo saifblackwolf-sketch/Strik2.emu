@@ -1,0 +1,50 @@
+workflows:
+  strik2-m4-build:
+    name: Strik2.emu M4 Platform Bypass
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+    environment:
+      xcode: latest
+    scripts:
+      - name: Create CMake Modules
+        script: |
+          mkdir -p src/cpp/cmake
+          cat > src/cpp/cmake/Pcscx2Utils.cmake << 'EOF'
+          cmake_minimum_required(VERSION 3.16)
+          function(detect_operating_system)
+              set(APPLE 1 PARENT_SCOPE)
+              set(IOS 1 PARENT_SCOPE)
+              set(UNIX 1 PARENT_SCOPE)
+              set(CMAKE_SYSTEM_NAME "iOS" PARENT_SCOPE)
+          endfunction()
+          function(check_no_parenthesis_in_path path)
+          endfunction()
+          function(check_compiler_abi)
+          endfunction()
+          function(set_common_flags)
+          endfunction()
+          EOF
+          cp src/cpp/cmake/Pcscx2Utils.cmake src/cpp/cmake/Pcsx2Utils.cmake
+      
+      - name: Patch CMakeLists
+        script: |
+          if ! grep -q "CMAKE_MODULE_PATH" src/cpp/CMakeLists.txt; then
+            sed -i '' '1i\
+          list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+          ' src/cpp/CMakeLists.txt
+          fi
+      
+      - name: CMake Configure
+        script: |
+          rm -rf build/ios_device
+          cmake -S src/cpp -B build/ios_device -G Xcode -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT=iphoneos -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=16.0 -DiPSX2_REAL_DEVICE=ON -DCMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED=NO
+      
+      - name: Build
+        script: |
+          PROJECT_FILE=$(find build/ios_device -name "*.xcodeproj" | head -n 1)
+          xcodebuild -project "$PROJECT_FILE" -configuration Release -sdk iphoneos build
+          APP_PATH=$(find build/ios_device -name "*.app" -type d | head -n 1)
+          cd build/ios_device && mkdir -p Payload && cp -R "$APP_PATH" Payload/ && zip -qr iPSX2_M4_Final.ipa Payload/
+    
+    artifacts:
+      - build/ios_device/*.ipa
